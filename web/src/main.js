@@ -18,11 +18,19 @@ const demoFollowups = [
   { id: 'TASK-0715-009', patient: '南京微光商场', summary: '完成本周工单归档', dueAt: '已完成', status: '已完成' },
 ]
 
+const demoWorkOrders = [
+  { id: 'WO-202607-082', customerName: '杭州星河家电', category: '空调维修', description: '客厅空调制冷异常', priority: '高', status: '上门中', quote: { totalCents: 34000, laborCents: 8000, materialCents: 26000 }, dispatch: { technician: '周师傅', scheduledAt: '2026-07-18T14:00:00+08:00' }, events: [{ toStatus: '待受理', actor: '客服', createdAt: '2026-07-16T08:30:00Z' }, { toStatus: '已诊断', actor: '周师傅', createdAt: '2026-07-16T09:10:00Z' }, { toStatus: '上门中', actor: '调度员', createdAt: '2026-07-17T10:00:00Z' }] },
+  { id: 'WO-202607-081', customerName: '苏州云杉门店', category: '洗衣机维修', description: '滚筒异响', priority: '普通', status: '待报价', quote: { totalCents: 12800, laborCents: 5000, materialCents: 7800 }, events: [{ toStatus: '已诊断', actor: '沈师傅', createdAt: '2026-07-16T09:00:00Z' }] },
+  { id: 'WO-202607-080', customerName: '上海岸线公寓', category: '热水器维修', description: '热水器漏水', priority: '紧急', status: '已结案', quote: { totalCents: 22000, laborCents: 6000, materialCents: 16000 }, acceptance: { result: '客户确认完成', customerSign: '陈女士' }, warranty: { expiresAt: '2026-08-14' }, events: [{ toStatus: '已结案', actor: '客户', createdAt: '2026-07-14T12:00:00Z' }] },
+  { id: 'WO-202607-079', customerName: '南京微光商场', category: '冷柜维修', description: '冷柜温度过高', priority: '高', status: '待派工', quote: { totalCents: 56800, laborCents: 8000, materialCents: 48800 }, events: [{ toStatus: '待报价', actor: '客服', createdAt: '2026-07-16T11:00:00Z' }] },
+]
+
 const demoDashboard = { todayAppointments: 86, averageWaitMinutes: 12, completed: 58, checkedIn: 42, pendingFollowups: 12 }
-const statusColors = { 待确认: 'coral', 已确认: 'indigo', 候诊中: 'amber', 处理中: 'green', 已完成: 'green', 已取消: 'gray' }
+const statusColors = { 待确认: 'coral', 已确认: 'indigo', 候诊中: 'amber', 处理中: 'green', 已完成: 'green', 已取消: 'gray', 待受理: 'coral', 已诊断: 'indigo', 待报价: 'amber', 待派工: 'amber', 上门中: 'green', 待验收: 'coral', 已结案: 'gray' }
 const nav = [
   ['overview', '运营总览', '⌂'],
   ['queue', '工单队列', '▤'],
+  ['workorders', '工单工作台', '⚒'],
   ['doctors', '工程师排班', '◉'],
   ['patients', '客户资料', '♧'],
   ['followups', '服务跟进', '✓'],
@@ -31,6 +39,9 @@ const nav = [
 
 let appointments = demoAppointments.map((item) => ({ ...item }))
 let followupTasks = demoFollowups.map((item) => ({ ...item }))
+let workOrders = demoWorkOrders.map((item) => ({ ...item }))
+let selectedWorkOrder = null
+let workOrderFilter = ''
 let dashboard = { ...demoDashboard }
 let page = 'overview'
 let toast = ''
@@ -96,10 +107,12 @@ function header(title) {
 
 function render() {
   const title = nav.find((item) => item[0] === page)?.[1] || '运营总览'
-  const content = page === 'overview' ? overview() : page === 'queue' ? queue() : page === 'doctors' ? doctors() : page === 'patients' ? patients() : page === 'followups' ? followups() : mobileView()
+  const content = page === 'overview' ? overview() : page === 'queue' ? queue() : page === 'workorders' ? workbench() : page === 'doctors' ? doctors() : page === 'patients' ? patients() : page === 'followups' ? followups() : mobileView()
   document.querySelector('#app').innerHTML = `<div class="shell"><aside><div class="brand"><span>⚙</span><div><strong>RepairFlow</strong><small>售后维修运营中心</small></div></div><div class="clinic">● 上海静安联合服务中心　⌄</div><p class="caption">临床运营</p><nav>${nav.map((item) => `<button class="${page === item[0] ? 'active' : ''}" data-page="${item[0]}"><i>${item[2]}</i>${item[1]}${item[0] === 'queue' ? '<em>8</em>' : ''}</button>`).join('')}</nav><div class="user"><b>许</b><span><strong>许汝林</strong><small>运营管理员</small></span></div></aside><main>${header(title)}<section class="heading"><div><p>THURSDAY, JUL 16 · REPAIRFLOW</p><h1>${title} <i>✦</i></h1><label>让每一次工单，都有被照顾的下一步。</label></div><button class="primary" data-action="create-appointment">＋ 新建工单</button></section>${content}<footer>RepairFlow 售后维修运营 · 免费开源 · 演示数据不含诊断与真实客户信息</footer><div class="toast" ${toast ? '' : 'hidden'}>${toast}</div></main></div>`
   const root = document.querySelector('#app')
   displayCopy(root)
+  const filter = document.querySelector('[data-work-order-filter]')
+  if (filter) { filter.value = workOrderFilter; filter.addEventListener('change', () => { workOrderFilter = filter.value; render() }) }
   bind()
 }
 
@@ -109,6 +122,14 @@ function overview() {
 
 function queue() {
   return `<section class="panel full"><div class="panel-head"><div><h2>工单队列</h2><p>${dataSource === 'API 数据' ? 'API 实时工单' : '20 条演示工单'} · 支持确认、候诊、处理和完成</p></div><span class="chip">今天　⌄</span></div><div class="table"><div class="th"><span>工单编号 / 客户</span><span>科室</span><span>时间</span><span>状态</span><span>操作</span></div>${appointments.concat(dataSource === 'API 数据' ? [] : appointments.slice(0, 3)).map((appointment) => `<div class="tr"><span><strong>${appointment.id}</strong><small>${appointment.patient}</small></span><span>${appointment.department}</span><span>${timeLabel(appointment.scheduledAt)}</span><b class="status ${statusColors[appointment.status] || 'indigo'}">${appointment.status}</b><span>${appointmentAction(appointment)}</span></div>`).join('')}</div></section>`
+}
+
+function money(cents) { return `¥${(Number(cents || 0) / 100).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}` }
+
+function workbench() {
+  const current = selectedWorkOrder
+  const visible = workOrderFilter ? workOrders.filter((item) => item.status === workOrderFilter) : workOrders
+  return `<section class="grid workorder-grid"><article class="panel full"><div class="panel-head"><div><h2>工单工作台</h2><p>${dataSource === 'API 数据' ? 'API 实时工单' : '4 条演示工单'} · 报价、派工、验收、质保完整闭环</p></div><select class="chip" data-work-order-filter><option value="">全部状态</option><option value="待受理">待受理</option><option value="已诊断">已诊断</option><option value="待报价">待报价</option><option value="待派工">待派工</option><option value="上门中">上门中</option><option value="待验收">待验收</option><option value="已结案">已结案</option></select></div><div class="table"><div class="th"><span>工单 / 客户</span><span>服务类型</span><span>预估费用</span><span>状态</span><span>操作</span></div>${visible.map((order) => `<div class="tr"><span><strong>${order.id}</strong><small>${order.customerName}</small></span><span>${order.category}</span><span>${money(order.quote?.totalCents)}</span><b class="status ${statusColors[order.status] || 'indigo'}">${order.status}</b><button class="text-action" data-action="open-work-order" data-work-order-id="${order.id}">查看详情</button></div>`).join('') || '<div class="muted">暂无匹配工单</div>'}</div></article>${current ? `<article class="panel workorder-detail"><div class="panel-head"><div><h2>${current.customerName}</h2><p>${current.id} · ${current.category} · ${current.priority || '普通'}优先级</p></div><b class="status ${statusColors[current.status] || 'indigo'}">${current.status}</b></div><p class="description">${current.description}</p><div class="detail-amount"><span>报价 ${money(current.quote?.totalCents)}</span><strong>${current.dispatch?.technician || '待安排工程师'}</strong></div><div class="detail-actions"><button class="primary small" data-action="work-order-quote" data-work-order-id="${current.id}">提交报价</button><button class="secondary small" data-action="work-order-dispatch" data-work-order-id="${current.id}">安排上门</button><button class="secondary small" data-action="work-order-accept" data-work-order-id="${current.id}">确认验收</button><button class="secondary small" data-action="work-order-warranty" data-work-order-id="${current.id}">登记质保</button></div><h3>服务时间线</h3><div class="invoice-events">${(current.events || []).map((event) => `<div class="event"><i></i><div><strong>${event.toStatus || event.type}</strong><small>${event.actor || '系统'} · ${event.createdAt || '--'}</small></div></div>`).join('') || '<p class="muted">暂无服务事件</p>'}</div></article>` : '<article class="panel workorder-detail empty"><h2>选择一个工单</h2><p>查看报价、工程师排班、客户验收和质保记录。</p></article>'}</section>`
 }
 
 function doctors() {
@@ -132,14 +153,16 @@ async function refreshFromApi({ quiet = false } = {}) {
   isSyncing = true
   render()
   try {
-    const [nextDashboard, nextAppointments, nextFollowups] = await Promise.all([
+    const [nextDashboard, nextAppointments, nextFollowups, nextWorkOrders] = await Promise.all([
       api.getDashboard(),
       api.listAppointments({ page: 1, pageSize: 20 }),
       api.listFollowups({ page: 1, pageSize: 20 }),
+      api.listWorkOrders({ page: 1, pageSize: 20 }),
     ])
     dashboard = { ...demoDashboard, ...nextDashboard }
     appointments = (nextAppointments?.list || []).map(normalizeAppointment)
     followupTasks = (nextFollowups?.list || []).map(normalizeFollowup)
+    workOrders = (nextWorkOrders?.list || []).map((item) => ({ ...item, events: item.events || [] }))
     dataSource = 'API 数据'
     if (!quiet) toast = '已从 RepairFlow API 刷新数据'
   } catch (error) {
@@ -149,6 +172,25 @@ async function refreshFromApi({ quiet = false } = {}) {
     isSyncing = false
     render()
   }
+}
+
+async function openWorkOrder(button) {
+  const id = button.dataset.workOrderId
+  try { selectedWorkOrder = await api.getWorkOrder(id); dataSource = 'API 数据' } catch (error) { selectedWorkOrder = workOrders.find((item) => item.id === id) || null; showToast(`工单详情接口暂不可用：${error.message}`); return }
+  render()
+}
+
+async function workOrderAction(button, action) {
+  const id = button.dataset.workOrderId
+  const local = workOrders.find((item) => item.id === id) || selectedWorkOrder
+  if (!local) return
+  try {
+    if (action === 'quote') await api.quoteWorkOrder(id, { laborCents: 8000, materialCents: 26000, note: '演示报价' })
+    if (action === 'dispatch') await api.dispatchWorkOrder(id, { technician: '周师傅', scheduledAt: '2026-07-18T14:00:00+08:00' })
+    if (action === 'accept') await api.acceptWorkOrder(id, { result: '客户确认维修完成', customerSign: local.customerName })
+    if (action === 'warranty') await api.createWorkOrderWarranty(id, { expiresAt: '2026-08-18', note: '演示质保登记' })
+    selectedWorkOrder = await api.getWorkOrder(id); workOrders = workOrders.map((item) => item.id === id ? selectedWorkOrder : item); dataSource = 'API 数据'; showToast(action === 'quote' ? '报价已提交' : action === 'dispatch' ? '已安排上门' : action === 'accept' ? '验收已确认' : '质保已登记'); render()
+  } catch (error) { showToast(`${action === 'quote' ? '提交报价' : action === 'dispatch' ? '安排上门' : action === 'accept' ? '确认验收' : '登记质保'}失败：${error.message}`) }
 }
 
 function replaceAppointment(updated) {
@@ -210,6 +252,11 @@ function bind() {
   document.querySelectorAll('[data-action]').forEach((element) => element.addEventListener('click', () => {
     if (element.dataset.action === 'checkin' || element.dataset.action === 'status') return advanceAppointment(element)
     if (element.dataset.action === 'complete-followup') return completeFollowup(element)
+    if (element.dataset.action === 'open-work-order') return openWorkOrder(element)
+    if (element.dataset.action === 'work-order-quote') return workOrderAction(element, 'quote')
+    if (element.dataset.action === 'work-order-dispatch') return workOrderAction(element, 'dispatch')
+    if (element.dataset.action === 'work-order-accept') return workOrderAction(element, 'accept')
+    if (element.dataset.action === 'work-order-warranty') return workOrderAction(element, 'warranty')
     if (element.dataset.action === 'create-appointment') return createAppointment()
     return undefined
   }))

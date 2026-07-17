@@ -64,3 +64,30 @@ func TestRouterRejectsWriteWithoutIdempotencyKey(t *testing.T) {
 		t.Fatalf("status = %d, body=%s", res.Code, res.Body.String())
 	}
 }
+
+func TestRouterWorkOrderEndpointsUseEnvelope(t *testing.T) {
+	r := NewRouter(NewMemoryStore(), newMemoryIdempotency())
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/work-orders", bytes.NewBufferString(`{"customerName":"林先生","category":"空调维修","description":"不制冷"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", "router-wo-create")
+	res := httptest.NewRecorder()
+	r.ServeHTTP(res, req)
+	if res.Code != http.StatusCreated {
+		t.Fatalf("status=%d body=%s", res.Code, res.Body.String())
+	}
+	var envelope struct {
+		Code int       `json:"code"`
+		Data WorkOrder `json:"data"`
+	}
+	if err := json.Unmarshal(res.Body.Bytes(), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.Code != 0 || envelope.Data.ID == "" {
+		t.Fatalf("bad envelope=%+v", envelope)
+	}
+	detail := httptest.NewRecorder()
+	r.ServeHTTP(detail, httptest.NewRequest(http.MethodGet, "/api/v1/work-orders/"+envelope.Data.ID, nil))
+	if detail.Code != http.StatusOK || !bytes.Contains(detail.Body.Bytes(), []byte("events")) {
+		t.Fatalf("detail=%d body=%s", detail.Code, detail.Body.String())
+	}
+}

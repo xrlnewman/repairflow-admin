@@ -66,6 +66,14 @@ export function createApiClient({ baseUrl, fetchImpl = globalThis.fetch } = {}) 
     listFollowups: (query) => request(withQuery('/followups', query)),
     createFollowup: (input, idempotencyKey) => request('/followups', { method: 'POST', body: input, idempotencyKey }),
     completeFollowup: (id, idempotencyKey) => request(`/followups/${encodeURIComponent(id)}/complete`, { method: 'POST', idempotencyKey }),
+    listWorkOrders: (query) => request(withQuery('/work-orders', query)),
+    getWorkOrder: (id) => request(`/work-orders/${encodeURIComponent(id)}`),
+    createWorkOrder: (input, idempotencyKey) => request('/work-orders', { method: 'POST', body: input, idempotencyKey }),
+    updateWorkOrderStatus: (id, status, actor, idempotencyKey) => request(`/work-orders/${encodeURIComponent(id)}/status`, { method: 'POST', body: { status, ...(actor ? { actor } : {}) }, idempotencyKey }),
+    quoteWorkOrder: (id, input, idempotencyKey) => request(`/work-orders/${encodeURIComponent(id)}/quote`, { method: 'POST', body: input, idempotencyKey }),
+    dispatchWorkOrder: (id, input, idempotencyKey) => request(`/work-orders/${encodeURIComponent(id)}/dispatch`, { method: 'POST', body: input, idempotencyKey }),
+    acceptWorkOrder: (id, input, idempotencyKey) => request(`/work-orders/${encodeURIComponent(id)}/acceptance`, { method: 'POST', body: input, idempotencyKey }),
+    createWorkOrderWarranty: (id, input, idempotencyKey) => request(`/work-orders/${encodeURIComponent(id)}/warranty`, { method: 'POST', body: input, idempotencyKey }),
   }
 }
 

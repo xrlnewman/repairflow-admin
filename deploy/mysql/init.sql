@@ -98,3 +98,41 @@ INSERT IGNORE INTO followups (id,patient_id,patient_name,summary,due_at,status,c
  ('FW-0716-010','PT-010','演示客户10','满意度回访','2026-07-21','待完成','2026-07-16T00:00:00Z','2026-07-16T00:00:00Z'),
  ('FW-0716-011','PT-011','演示客户11','复诊提醒','2026-07-22','待完成','2026-07-16T00:00:00Z','2026-07-16T00:00:00Z'),
  ('FW-0716-012','PT-012','演示客户12','康复计划提醒','2026-07-22','待完成','2026-07-16T00:00:00Z','2026-07-16T00:00:00Z');
+
+CREATE TABLE IF NOT EXISTS work_orders (
+  id VARCHAR(64) PRIMARY KEY,
+  customer_id VARCHAR(64) NOT NULL DEFAULT '', customer_name VARCHAR(128) NOT NULL,
+  phone VARCHAR(32) NOT NULL DEFAULT '', address VARCHAR(255) NOT NULL DEFAULT '',
+  category VARCHAR(64) NOT NULL, description VARCHAR(255) NOT NULL,
+  priority VARCHAR(32) NOT NULL DEFAULT '普通', status VARCHAR(32) NOT NULL,
+  created_at VARCHAR(64) NOT NULL, updated_at VARCHAR(64) NOT NULL,
+  INDEX idx_work_orders_status_created (status, created_at)
+);
+CREATE TABLE IF NOT EXISTS work_order_quotes (
+  id VARCHAR(64) PRIMARY KEY, work_order_id VARCHAR(64) NOT NULL,
+  labor_cents BIGINT NOT NULL, material_cents BIGINT NOT NULL, total_cents BIGINT NOT NULL,
+  note VARCHAR(255) NOT NULL DEFAULT '', created_at VARCHAR(64) NOT NULL,
+  INDEX idx_work_order_quotes_order (work_order_id, created_at)
+);
+CREATE TABLE IF NOT EXISTS work_order_dispatches (
+  id VARCHAR(64) PRIMARY KEY, work_order_id VARCHAR(64) NOT NULL,
+  technician VARCHAR(64) NOT NULL, scheduled_at VARCHAR(64) NOT NULL,
+  note VARCHAR(255) NOT NULL DEFAULT '', created_at VARCHAR(64) NOT NULL,
+  INDEX idx_work_order_dispatches_order (work_order_id, created_at)
+);
+CREATE TABLE IF NOT EXISTS work_order_acceptances (
+  id VARCHAR(64) PRIMARY KEY, work_order_id VARCHAR(64) NOT NULL,
+  result VARCHAR(255) NOT NULL, customer_sign VARCHAR(64) NOT NULL, accepted_at VARCHAR(64) NOT NULL,
+  INDEX idx_work_order_acceptances_order (work_order_id, accepted_at)
+);
+CREATE TABLE IF NOT EXISTS work_order_warranties (
+  id VARCHAR(64) PRIMARY KEY, work_order_id VARCHAR(64) NOT NULL,
+  expires_at VARCHAR(32) NOT NULL, note VARCHAR(255) NOT NULL DEFAULT '', created_at VARCHAR(64) NOT NULL,
+  INDEX idx_work_order_warranties_order (work_order_id, created_at)
+);
+CREATE TABLE IF NOT EXISTS work_order_events (
+  id VARCHAR(64) PRIMARY KEY, work_order_id VARCHAR(64) NOT NULL,
+  from_status VARCHAR(32) NOT NULL DEFAULT '', to_status VARCHAR(32) NOT NULL,
+  type VARCHAR(32) NOT NULL, actor VARCHAR(64) NOT NULL, note VARCHAR(255) NOT NULL DEFAULT '', created_at VARCHAR(64) NOT NULL,
+  INDEX idx_work_order_events_order (work_order_id, created_at)
+);

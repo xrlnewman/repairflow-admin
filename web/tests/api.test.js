@@ -84,3 +84,26 @@ test('exposes mobile lifecycle and follow-up operations through the same client'
     '/api/v1/followups/FW-1/complete',
   ])
 })
+
+test('exposes repair work-order quote dispatch acceptance and warranty lifecycle', async () => {
+  const paths = []
+  const client = createApiClient({ fetchImpl: async (url) => { paths.push(url); return response({ id: 'WO-1', status: '已诊断' }) } })
+  await client.listWorkOrders({ page: 1, pageSize: 20, status: '待报价' })
+  await client.getWorkOrder('WO-1')
+  await client.createWorkOrder({ customerName: '林先生', description: '空调故障' })
+  await client.updateWorkOrderStatus('WO-1', '已诊断')
+  await client.quoteWorkOrder('WO-1', { laborCents: 8000, materialCents: 12000 })
+  await client.dispatchWorkOrder('WO-1', { technician: '周师傅', scheduledAt: '2026-07-18T14:00:00+08:00' })
+  await client.acceptWorkOrder('WO-1', { result: '维修完成', customerSign: '林先生' })
+  await client.createWorkOrderWarranty('WO-1', { expiresAt: '2026-08-18' })
+  assert.deepEqual(paths, [
+    '/api/v1/work-orders?page=1&pageSize=20&status=%E5%BE%85%E6%8A%A5%E4%BB%B7',
+    '/api/v1/work-orders/WO-1',
+    '/api/v1/work-orders',
+    '/api/v1/work-orders/WO-1/status',
+    '/api/v1/work-orders/WO-1/quote',
+    '/api/v1/work-orders/WO-1/dispatch',
+    '/api/v1/work-orders/WO-1/acceptance',
+    '/api/v1/work-orders/WO-1/warranty',
+  ])
+})

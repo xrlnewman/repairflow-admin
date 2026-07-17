@@ -80,3 +80,57 @@ func TestFollowupCompletesOnce(t *testing.T) {
 		t.Fatalf("expected invalid completion, got %v", err)
 	}
 }
+
+func TestWorkOrderLifecycleQuoteDispatchAcceptanceWarranty(t *testing.T) {
+	store := NewMemoryStore()
+	svc := NewRepairService(store, NoopIdempotency{})
+	ctx := context.Background()
+	order, err := svc.CreateWorkOrder(ctx, CreateWorkOrderInput{CustomerName: "林先生", Phone: "13800000000", Address: "浦东新区 8 号", Category: "空调维修", Description: "制冷异常"}, "wo-create-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	order, _, err = svc.UpdateWorkOrderStatus(ctx, order.ID, WorkOrderDiagnosed, "调度员", "wo-status-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if order.Status != WorkOrderDiagnosed {
+		t.Fatalf("status=%s", order.Status)
+	}
+	order, _, err = svc.CreateWorkOrderQuote(ctx, order.ID, WorkOrderQuoteInput{LaborCents: 8000, MaterialCents: 26000, Note: "更换压缩机电容"}, "wo-quote-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	order, _, err = svc.DispatchWorkOrder(ctx, order.ID, WorkOrderDispatchInput{Technician: "周师傅", ScheduledAt: "2026-07-18T14:00:00+08:00"}, "wo-dispatch-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	order, _, err = svc.UpdateWorkOrderStatus(ctx, order.ID, WorkOrderOnSite, "调度员", "wo-onsite-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	order, _, err = svc.AcceptWorkOrder(ctx, order.ID, WorkOrderAcceptanceInput{Result: "客户确认维修完成", CustomerSign: "林先生"}, "wo-accept-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if order.Status != WorkOrderClosed {
+		t.Fatalf("status=%s", order.Status)
+	}
+	order, _, err = svc.CreateWorkOrderWarranty(ctx, order.ID, WorkOrderWarrantyInput{ExpiresAt: "2026-08-18", Note: "压缩机电容 30 天质保"}, "wo-warranty-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	detail, err := store.GetWorkOrder(ctx, order.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if detail.Quote == nil || detail.Dispatch == nil || detail.Acceptance == nil || detail.Warranty == nil || len(detail.Events) < 5 {
+		t.Fatalf("detail=%+v", detail)
+	}
+}
+
+func TestWorkOrderWriteRequiresIdempotencyKey(t *testing.T) {
+	_, err := NewRepairService(NewMemoryStore(), NoopIdempotency{}).CreateWorkOrder(context.Background(), CreateWorkOrderInput{CustomerName: "缺少幂等键"}, "")
+	if !errors.Is(err, ErrMissingIdempotencyKey) {
+		t.Fatalf("expected missing idempotency key, got %v", err)
+	}
+}

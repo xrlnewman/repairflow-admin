@@ -50,6 +50,11 @@ func NewRouter(store CareStore, idem idempotencyStore) *gin.Engine {
 		c.Next()
 	})
 	svc := NewCareService(store, idem)
+	workOrderStore, hasWorkOrderStore := store.(WorkOrderStore)
+	var repairSvc *RepairService
+	if hasWorkOrderStore {
+		repairSvc = NewRepairService(workOrderStore, idem)
+	}
 
 	r.GET("/healthz", func(c *gin.Context) {
 		respond(c, http.StatusOK, gin.H{"service": "repairflow", "status": "ok", "time": time.Now().UTC()})
@@ -176,6 +181,133 @@ func NewRouter(store CareStore, idem idempotencyStore) *gin.Engine {
 			return
 		}
 		respond(c, http.StatusOK, f)
+	})
+	api.GET("/work-orders", func(c *gin.Context) {
+		if repairSvc == nil {
+			fail(c, ErrInvalidInput)
+			return
+		}
+		page, pageSize := pageParams(c)
+		list, total, err := workOrderStore.ListWorkOrders(c.Request.Context(), page, pageSize, c.Query("status"))
+		if err != nil {
+			fail(c, err)
+			return
+		}
+		respond(c, http.StatusOK, pageData(list, total, page, pageSize))
+	})
+	api.GET("/work-orders/:id", func(c *gin.Context) {
+		if repairSvc == nil {
+			fail(c, ErrInvalidInput)
+			return
+		}
+		order, err := workOrderStore.GetWorkOrder(c.Request.Context(), c.Param("id"))
+		if err != nil {
+			fail(c, err)
+			return
+		}
+		respond(c, http.StatusOK, order)
+	})
+	api.POST("/work-orders", func(c *gin.Context) {
+		if repairSvc == nil {
+			fail(c, ErrInvalidInput)
+			return
+		}
+		var input CreateWorkOrderInput
+		if err := c.ShouldBindJSON(&input); err != nil {
+			fail(c, errors.Join(ErrInvalidInput, err))
+			return
+		}
+		order, err := repairSvc.CreateWorkOrder(c.Request.Context(), input, c.GetHeader("Idempotency-Key"))
+		if err != nil {
+			fail(c, err)
+			return
+		}
+		respond(c, http.StatusCreated, order)
+	})
+	api.POST("/work-orders/:id/quote", func(c *gin.Context) {
+		if repairSvc == nil {
+			fail(c, ErrInvalidInput)
+			return
+		}
+		var input WorkOrderQuoteInput
+		if err := c.ShouldBindJSON(&input); err != nil {
+			fail(c, errors.Join(ErrInvalidInput, err))
+			return
+		}
+		order, _, err := repairSvc.CreateWorkOrderQuote(c.Request.Context(), c.Param("id"), input, c.GetHeader("Idempotency-Key"))
+		if err != nil {
+			fail(c, err)
+			return
+		}
+		respond(c, http.StatusOK, order)
+	})
+	api.POST("/work-orders/:id/dispatch", func(c *gin.Context) {
+		if repairSvc == nil {
+			fail(c, ErrInvalidInput)
+			return
+		}
+		var input WorkOrderDispatchInput
+		if err := c.ShouldBindJSON(&input); err != nil {
+			fail(c, errors.Join(ErrInvalidInput, err))
+			return
+		}
+		order, _, err := repairSvc.DispatchWorkOrder(c.Request.Context(), c.Param("id"), input, c.GetHeader("Idempotency-Key"))
+		if err != nil {
+			fail(c, err)
+			return
+		}
+		respond(c, http.StatusOK, order)
+	})
+	api.POST("/work-orders/:id/status", func(c *gin.Context) {
+		if repairSvc == nil {
+			fail(c, ErrInvalidInput)
+			return
+		}
+		var input WorkOrderStatusInput
+		if err := c.ShouldBindJSON(&input); err != nil {
+			fail(c, errors.Join(ErrInvalidInput, err))
+			return
+		}
+		order, _, err := repairSvc.UpdateWorkOrderStatus(c.Request.Context(), c.Param("id"), input.Status, input.Actor, c.GetHeader("Idempotency-Key"))
+		if err != nil {
+			fail(c, err)
+			return
+		}
+		respond(c, http.StatusOK, order)
+	})
+	api.POST("/work-orders/:id/acceptance", func(c *gin.Context) {
+		if repairSvc == nil {
+			fail(c, ErrInvalidInput)
+			return
+		}
+		var input WorkOrderAcceptanceInput
+		if err := c.ShouldBindJSON(&input); err != nil {
+			fail(c, errors.Join(ErrInvalidInput, err))
+			return
+		}
+		order, _, err := repairSvc.AcceptWorkOrder(c.Request.Context(), c.Param("id"), input, c.GetHeader("Idempotency-Key"))
+		if err != nil {
+			fail(c, err)
+			return
+		}
+		respond(c, http.StatusOK, order)
+	})
+	api.POST("/work-orders/:id/warranty", func(c *gin.Context) {
+		if repairSvc == nil {
+			fail(c, ErrInvalidInput)
+			return
+		}
+		var input WorkOrderWarrantyInput
+		if err := c.ShouldBindJSON(&input); err != nil {
+			fail(c, errors.Join(ErrInvalidInput, err))
+			return
+		}
+		order, _, err := repairSvc.CreateWorkOrderWarranty(c.Request.Context(), c.Param("id"), input, c.GetHeader("Idempotency-Key"))
+		if err != nil {
+			fail(c, err)
+			return
+		}
+		respond(c, http.StatusOK, order)
 	})
 	return r
 }
